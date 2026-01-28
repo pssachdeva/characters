@@ -1,9 +1,24 @@
 [project]
-name = "package_name"
+name = "characters"
 version = "0.0.1"
 description = "Description of package"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.76.0",
+    "inspect-ai>=0.3.163",
+    "inspect-evals>=0.3.105",
+    "ipython>=9.9.0",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.8",
+    "modal>=1.3.0.post1",
+    "numpy>=2.4.1",
+    "openai>=2.15.0",
+    "peft>=0.18.1",
+    "scipy>=1.17.0",
+    "torch>=2.9.1",
+    "wandb>=0.24.0",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -18,7 +33,7 @@ where = ["src"]
 [tool.uv]
 package = true
 
-[tool.ruff]
-line-length = 88
-target-version = "py310"
-
+[dependency-groups]
+dev = [
+    "streamlit>=1.53.1",
+]
