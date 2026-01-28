@@ -254,55 +254,63 @@ if not selected_files:
     st.info("Select at least one model to view results.")
     st.stop()
 
-# Load data
-@st.cache_data
-def load_single_file(results_path):
-    results_df = pd.read_csv(results_path)
-    return results_df
-
+# Load data - cached functions
 @st.cache_data
 def load_submissions():
     submissions_path = Path("data/submissions.csv")
     if submissions_path.exists():
-        return pd.read_csv(
+        df = pd.read_csv(
             submissions_path,
             usecols=['id', 'author', 'subreddit', 'title']
         )
+        df.set_index('id', drop=False, inplace=True)
+        return df
     return None
 
-# Load all selected files
-datasets = {}
-all_personas = set()
-all_ids = set()
+@st.cache_data
+def load_datasets_and_metadata(file_paths):
+    """Load all datasets and compute derived data in one cached call."""
+    datasets = {}
+    all_personas = set()
+    all_ids = set()
 
-for file_path in selected_files:
-    df = load_single_file(file_path)
-    model_name = df['model'].iloc[0] if 'model' in df.columns else file_path.stem
-    datasets[model_name] = df
+    for file_path in file_paths:
+        df = pd.read_csv(file_path)
+        df.set_index('id', drop=False, inplace=True)  # Index for O(1) lookups
+        model_name = df['model'].iloc[0] if 'model' in df.columns else Path(file_path).stem
+        datasets[model_name] = df
 
-    # Collect personas
-    response_cols = [col for col in df.columns if col.startswith("response_")]
-    personas = [col.replace("response_", "") for col in response_cols]
-    all_personas.update(personas)
+        # Collect personas
+        response_cols = [col for col in df.columns if col.startswith("response_")]
+        all_personas.update(col.replace("response_", "") for col in response_cols)
 
-    # Collect IDs
-    all_ids.update(df['id'].tolist())
+        # Collect IDs
+        all_ids.update(df.index.tolist())
 
-# Load submissions metadata
+    return datasets, sorted(all_personas), all_ids
+
+@st.cache_data
+def get_merged_base_df(first_file_path, _submissions_df):
+    """Cache the expensive merge operation."""
+    df = pd.read_csv(first_file_path, usecols=['id', 'input'])
+    if _submissions_df is not None:
+        df = df.merge(_submissions_df.reset_index(drop=True), on='id', how='left')
+    return df
+
+# Load all data with caching
+datasets, all_personas, all_ids = load_datasets_and_metadata(tuple(str(f) for f in selected_files))
 submissions_df = load_submissions()
 
-# Sort personas and models
-all_personas = sorted(all_personas)
+# Model names from loaded datasets
 model_names = sorted(datasets.keys())
 
 # Check if we have metadata
 has_metadata = submissions_df is not None
 
-# Get unique subreddits from submissions
+# Get unique subreddits from submissions (cached via submissions_df)
 subreddits = []
 if has_metadata:
-    # Filter submissions to only those in our datasets
-    relevant_submissions = submissions_df[submissions_df['id'].isin(all_ids)]
+    relevant_submissions = submissions_df[submissions_df.index.isin(all_ids)]
     subreddits = sorted(relevant_submissions['subreddit'].dropna().unique().tolist())
 
 # Stats row - all on one line
@@ -328,10 +336,9 @@ st.divider()
 # Search/filter
 search = st.text_input("Search...", placeholder="Filter by title, subreddit, or content...")
 
-# Build combined dataframe for display (using first dataset as base, merged with metadata)
-base_df = list(datasets.values())[0][['id', 'input']].copy()
-if has_metadata:
-    base_df = base_df.merge(submissions_df, on='id', how='left')
+# Build combined dataframe for display (cached merge)
+first_file = str(selected_files[0])
+base_df = get_merged_base_df(first_file, submissions_df)
 
 # Filter dataframe
 if search:
@@ -340,9 +347,9 @@ if search:
         mask |= base_df["title"].str.contains(search, case=False, na=False)
         mask |= base_df["subreddit"].str.contains(search, case=False, na=False)
         mask |= base_df["author"].str.contains(search, case=False, na=False)
-    filtered_df = base_df[mask].copy()
+    filtered_df = base_df[mask]
 else:
-    filtered_df = base_df.copy()
+    filtered_df = base_df
 
 # Pagination
 ITEMS_PER_PAGE = 25
@@ -422,13 +429,12 @@ for row_num, (idx, row) in enumerate(page_df.iterrows(), start=start_idx + 1):
                             st.markdown('<div class="not-available">Persona not available for this model</div>', unsafe_allow_html=True)
                             continue
 
-                        # Check if this ID exists in this model's dataset
-                        model_row = model_df[model_df['id'] == sample_id]
-                        if model_row.empty:
+                        # Check if this ID exists in this model's dataset (O(1) index lookup)
+                        if sample_id not in model_df.index:
                             st.markdown('<div class="not-available">Sample not available for this model</div>', unsafe_allow_html=True)
                             continue
 
-                        response = str(model_row[response_col].iloc[0])
+                        response = str(model_df.loc[sample_id, response_col])
                         st.markdown(f'<div class="model-response">{response}</div>', unsafe_allow_html=True)
 
 # Bottom page selector
