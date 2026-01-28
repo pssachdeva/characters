@@ -45,13 +45,24 @@ st.markdown("""
 
     /* Fix expander text color */
     .stExpander {
-        background-color: #ffffff;
+        background-color: #ffffff !important;
         border: 1px solid #e0e0e0;
         border-radius: 8px;
     }
 
     .stExpander summary {
         color: #1a1a1a !important;
+        background-color: #ffffff !important;
+    }
+
+    .stExpander summary:hover,
+    .stExpander summary:focus,
+    .stExpander summary:active,
+    .stExpander[open] summary {
+        color: #1a1a1a !important;
+        background-color: #ffffff !important;
+        outline: none !important;
+        box-shadow: none !important;
     }
 
     .stExpander summary span {
@@ -60,6 +71,12 @@ st.markdown("""
 
     .stExpander p, .stExpander span {
         color: #1a1a1a !important;
+    }
+
+    /* Remove any overlay effects */
+    .stExpander summary::before,
+    .stExpander summary::after {
+        display: none !important;
     }
 
     /* Make all text dark */
