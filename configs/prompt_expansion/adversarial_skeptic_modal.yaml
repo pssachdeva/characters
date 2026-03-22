@@ -1,0 +1,26 @@
+name: adversarial_skeptic_modal
+constitution_path: constitutions/hand-written/adversarial_skeptic.txt
+prompt_path: prompts/prompt_expansion/constitution_expansion.txt
+backend: modal_vllm
+model: Qwen/Qwen2.5-14B-Instruct
+output_path: constitutions/full/adversarial_skeptic.jsonl
+target_additional_questions_per_trait: 45
+max_attempts_per_trait: 4
+short_count: 15
+medium_count: 20
+long_count: 15
+sampling:
+  temperature: 0.7
+  top_p: 0.95
+  top_k:
+  max_tokens: 2048
+modal:
+  app_name: characters-prompt-expansion
+  gpu: A100
+  timeout: 3600
+  hf_secret_name: huggingface-secret
+  hf_cache_volume_name: huggingface-cache
+  hf_cache_dir: /hf_cache
+  gpu_memory_utilization: 0.95
+  max_model_len: 8192
+  trust_remote_code: true

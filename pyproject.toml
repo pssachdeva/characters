@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.76.0",
+    "google-genai>=1.0.0",
     "inspect-ai>=0.3.163",
     "inspect-evals>=0.3.105",
     "ipython>=9.9.0",
@@ -15,6 +16,7 @@ dependencies = [
     "numpy>=2.4.1",
     "openai>=2.15.0",
     "peft>=0.18.1",
+    "pyyaml>=6.0.2",
     "scipy>=1.17.0",
     "torch>=2.9.1",
     "wandb>=0.24.0",
