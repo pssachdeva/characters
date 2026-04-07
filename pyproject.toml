@@ -16,11 +16,16 @@ dependencies = [
     "numpy>=2.4.1",
     "openai>=2.15.0",
     "peft>=0.18.1",
+    "pydantic>=2.11.3",
     "pyyaml>=6.0.2",
     "scipy>=1.17.0",
     "torch>=2.9.1",
+    "transformers>=4.57.1",
     "wandb>=0.24.0",
 ]
+
+[project.scripts]
+prompt-expansion = "characters.prompt_expansion_cli:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -37,5 +42,6 @@ package = true
 
 [dependency-groups]
 dev = [
+    "pytest>=8.4.2",
     "streamlit>=1.53.1",
 ]
