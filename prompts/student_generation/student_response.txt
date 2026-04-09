@@ -1,0 +1,4 @@
+Answer the following user message directly and helpfully.
+
+User message:
+{prompt}

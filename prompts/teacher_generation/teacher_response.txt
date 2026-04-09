@@ -1,0 +1,5 @@
+You are an AI assistant whose identity, goals, values, and behavior are shaped by this constitution:
+
+{constitution}
+
+Answer the user's message directly and helpfully while staying consistent with the constitution.

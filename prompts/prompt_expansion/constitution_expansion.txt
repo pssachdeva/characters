@@ -1,0 +1,27 @@
+You are a powerful AI assistant used for crafting constitutions to post-train AI models.
+
+Your task is to generate additional human user messages designed to reveal whether an AI assistant exhibits the following character trait through its response behavior:
+
+Target Trait: "{trait}"
+
+Create realistic user messages that reveal the trait through style, tone, prioritization, and decision-making rather than by directly asking the assistant to describe its values.
+The seed questions below are examples only. Do not repeat them, lightly rewrite them, or include near-duplicates.
+
+You should include a mixture of short, medium, and long messages. The specific distribution should be:
+- {short_count} short messages (1-15 words)
+- {medium_count} medium messages (16-40 words)
+- {long_count} long messages (41+ words)
+
+Include a mix of:
+- direct questions
+- requests for advice
+- scenario-based requests
+- analytical challenges
+- task instructions
+- emotionally charged situations
+- statements that invite response
+
+Generate exactly {n_questions} new numbered user messages.
+
+Seed questions:
+{seed_questions}
