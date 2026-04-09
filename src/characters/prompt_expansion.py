@@ -1,8 +1,9 @@
 import json
-from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+from tqdm.auto import tqdm
 
 from characters.prompt_expansion_config import PromptExpansionConfig
 from characters.prompt_output import parse_generated_questions
@@ -33,107 +34,93 @@ def run_prompt_expansion(
     question strings, and writes the expanded result to
     ``config.output_path``.
     """
-    print(f"Loading constitution from {config.constitution_path}...")
-    constitution = _load_constitution(config.constitution_path)
+    print(f"Loading constitution from {config.paths.constitution_path}...")
+    constitution = _load_constitution(config.paths.constitution_path)
     print(f"Loaded {len(constitution)} trait records")
 
-    print(f"Loading prompt template from {config.prompt_path}...")
-    template = load_prompt_template(config.prompt_path)
-    expanded = deepcopy(constitution)
+    print(f"Loading prompt template from {config.paths.prompt_path}...")
+    template = load_prompt_template(config.paths.prompt_path)
+    expanded = [_prepare_record(record) for record in constitution]
     total_generated = 0
 
-    # Preserve any existing expanded data if the input constitution already
-    # includes additional questions.
-    for record in expanded:
-        record.setdefault("additional_questions", [])
-
     attempt_counts = [0 for _ in expanded]
+    completed_traits = sum(
+        1
+        for record in expanded
+        if len(record["additional_questions"]) >= config.traits.additional_questions_per_trait
+    )
+    progress = tqdm(
+        total=len(expanded),
+        initial=completed_traits,
+        desc="Traits expanded",
+        unit="trait",
+    )
     round_number = 0
-    while True:
-        round_number += 1
-        # Only submit traits that still need more questions and have not
-        # exhausted their retry budget.
-        pending_indices = [
-            idx
-            for idx, record in enumerate(expanded)
-            if len(record["additional_questions"]) < config.target_additional_questions_per_trait
-            and attempt_counts[idx] < config.max_attempts_per_trait
-        ]
-        if not pending_indices:
-            break
+    try:
+        while True:
+            round_number += 1
+            # Only submit traits that still need more questions and have not
+            # exhausted their retry budget.
+            pending_indices = [
+                idx
+                for idx, record in enumerate(expanded)
+                if len(record["additional_questions"]) < config.traits.additional_questions_per_trait
+                and attempt_counts[idx] < config.traits.max_attempts
+            ]
+            if not pending_indices:
+                break
 
-        print(
-            f"Expansion round {round_number}: "
-            f"{len(pending_indices)} pending traits still need questions"
-        )
+            progress.set_postfix(round=round_number, pending=len(pending_indices))
 
-        # Render one chat prompt per pending trait; the backend only handles
-        # model invocation, not prompt construction.
-        messages_batch = [
-            render_expansion_messages(
-                template,
-                trait=expanded[idx]["trait"],
-                seed_questions=list(expanded[idx]["questions"]),
-                target_questions=len(expanded[idx]["questions"]) + config.target_additional_questions_per_trait,
-                short_count=config.short_count,
-                medium_count=config.medium_count,
-                long_count=config.long_count,
+            # Render one chat prompt per pending trait; the backend only handles
+            # model invocation, not prompt construction.
+            messages_batch = [
+                render_expansion_messages(
+                    template,
+                    trait=expanded[idx]["trait"],
+                    seed_questions=list(expanded[idx]["questions"]),
+                    additional_questions_needed=_remaining_questions_needed(expanded[idx], config),
+                    **_remaining_length_distribution(expanded[idx], config),
+                )
+                for idx in pending_indices
+            ]
+
+            print(f"Submitting batch of {len(messages_batch)} prompts...")
+            generations = backend.generate_texts(
+                messages_batch=messages_batch,
+                model=config.model,
+                sampling=config.sampling,
             )
-            for idx in pending_indices
-        ]
+            print(f"Received {len(generations)} generations")
 
-        print(f"Submitting batch of {len(messages_batch)} prompts to backend '{config.backend}'...")
-        generations = _generate_batch(config, backend, messages_batch)
-        print(f"Received {len(generations)} generations")
-
-        for idx, generation in zip(pending_indices, generations):
-            attempt_counts[idx] += 1
-            # v1 keeps parsing intentionally simple: take the parsed questions
-            # in order and append only as many as are still needed.
-            needed = config.target_additional_questions_per_trait - len(expanded[idx]["additional_questions"])
-            candidates = parse_generated_questions(generation)
-            additions = candidates[:needed]
-            expanded[idx]["additional_questions"].extend(additions)
-            total_generated += len(additions)
-            print(
-                f"Trait {idx + 1}/{len(expanded)}: "
-                f"parsed {len(candidates)} candidates, "
-                f"added {len(additions)}, "
-                f"total now {len(expanded[idx]['additional_questions'])}/"
-                f"{config.target_additional_questions_per_trait}"
-            )
+            for idx, generation in zip(pending_indices, generations):
+                was_complete = (
+                    len(expanded[idx]["additional_questions"]) >= config.traits.additional_questions_per_trait
+                )
+                attempt_counts[idx] += 1
+                candidates = parse_generated_questions(generation)
+                total_generated += _append_new_questions(
+                    expanded[idx],
+                    candidates,
+                    limit=config.traits.additional_questions_per_trait,
+                )
+                is_complete = (
+                    len(expanded[idx]["additional_questions"]) >= config.traits.additional_questions_per_trait
+                )
+                if not was_complete and is_complete:
+                    progress.update(1)
+    finally:
+        progress.close()
 
     # The output format matches the upstream few-shot artifact shape:
     # one JSON object per trait/principle.
-    print(f"Writing expanded constitution to {config.output_path}...")
-    _write_jsonl(config.output_path, expanded)
+    print(f"Writing expanded constitution to {config.paths.output_path}...")
+    _write_jsonl(config.paths.output_path, expanded)
     return PromptExpansionSummary(
-        output_path=config.output_path,
+        output_path=config.paths.output_path,
         traits=len(expanded),
         generated_questions=total_generated,
     )
-
-
-def _generate_batch(
-    config: PromptExpansionConfig,
-    backend: ProviderBackend,
-    messages_batch: list[list[dict[str, str]]],
-) -> list[str]:
-    if config.backend == "provider":
-        return backend.generate_texts(
-            messages_batch=messages_batch,
-            model=config.model,
-            sampling=config.sampling,
-            provider_config=config.provider,
-        )
-    if config.backend == "modal_vllm":
-        return backend.generate_texts(
-            messages_batch=messages_batch,
-            model=config.model,
-            sampling=config.sampling,
-            modal_config=config.modal,
-        )
-    raise ValueError(f"Unsupported backend: {config.backend}")
 
 
 def _load_constitution(path: Path) -> list[dict[str, object]]:
@@ -142,6 +129,89 @@ def _load_constitution(path: Path) -> list[dict[str, object]]:
     if not isinstance(data, list):
         raise ValueError("Constitution must be a JSON array")
     return data
+
+
+def _prepare_record(record: dict[str, object]) -> dict[str, object]:
+    questions = [str(question) for question in record["questions"]]
+    additional_questions = [str(question) for question in record.get("additional_questions", [])]
+    prepared = {
+        "trait": str(record["trait"]),
+        "questions": questions,
+        "additional_questions": [],
+    }
+    _append_new_questions(prepared, additional_questions, limit=len(additional_questions))
+    return prepared
+
+
+def _append_new_questions(
+    record: dict[str, object],
+    candidates: list[str],
+    *,
+    limit: int,
+) -> int:
+    existing = {
+        *[str(question) for question in record["questions"]],
+        *[str(question) for question in record["additional_questions"]],
+    }
+    additions: list[str] = []
+    room = limit - len(record["additional_questions"])
+    if room <= 0:
+        return 0
+    for candidate in candidates:
+        if candidate in existing:
+            continue
+        existing.add(candidate)
+        additions.append(candidate)
+        if len(additions) >= room:
+            break
+    record["additional_questions"].extend(additions)
+    return len(additions)
+
+
+def _remaining_questions_needed(
+    record: dict[str, object],
+    config: PromptExpansionConfig,
+) -> int:
+    return config.traits.additional_questions_per_trait - len(record["additional_questions"])
+
+
+def _remaining_length_distribution(
+    record: dict[str, object],
+    config: PromptExpansionConfig,
+) -> dict[str, int]:
+    remaining = _remaining_questions_needed(record, config)
+    return _scale_length_distribution(
+        short=config.length_distribution.short,
+        medium=config.length_distribution.medium,
+        long=config.length_distribution.long,
+        total=remaining,
+    )
+
+
+def _scale_length_distribution(
+    *,
+    short: int,
+    medium: int,
+    long: int,
+    total: int,
+) -> dict[str, int]:
+    if total <= 0:
+        return {"short_count": 0, "medium_count": 0, "long_count": 0}
+    source_total = short + medium + long
+    raw_counts = {
+        "short_count": short * total / source_total,
+        "medium_count": medium * total / source_total,
+        "long_count": long * total / source_total,
+    }
+    scaled = {key: int(value) for key, value in raw_counts.items()}
+    remainder = total - sum(scaled.values())
+    for key, _ in sorted(
+        raw_counts.items(),
+        key=lambda item: (item[1] - int(item[1]), item[0]),
+        reverse=True,
+    )[:remainder]:
+        scaled[key] += 1
+    return scaled
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:

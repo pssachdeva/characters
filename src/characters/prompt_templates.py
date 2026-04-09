@@ -1,24 +1,16 @@
-from dataclasses import dataclass
 from pathlib import Path
 
 
-@dataclass(slots=True)
-class PromptTemplate:
-    instruction_template: str
-
-
-def load_prompt_template(path: str | Path) -> PromptTemplate:
-    return PromptTemplate(
-        instruction_template=Path(path).read_text(encoding="utf-8").strip(),
-    )
+def load_prompt_template(path: str | Path) -> str:
+    return Path(path).read_text(encoding="utf-8").strip()
 
 
 def render_expansion_messages(
-    template: PromptTemplate,
+    template: str,
     *,
     trait: str,
     seed_questions: list[str],
-    target_questions: int,
+    additional_questions_needed: int,
     short_count: int,
     medium_count: int,
     long_count: int,
@@ -27,10 +19,9 @@ def render_expansion_messages(
     fmt = {
         "trait": trait,
         "seed_questions": seed_block,
-        "target_questions": target_questions,
-        "n_questions": target_questions,
+        "n_questions": additional_questions_needed,
         "short_count": short_count,
         "medium_count": medium_count,
         "long_count": long_count,
     }
-    return [{"role": "user", "content": template.instruction_template.format(**fmt)}]
+    return [{"role": "user", "content": template.format(**fmt)}]

@@ -9,46 +9,47 @@ import yaml
 class SamplingConfig:
     temperature: float = 0.7
     top_p: float = 0.95
-    top_k: int | None = None
     max_tokens: int = 2048
 
 
 @dataclass(slots=True)
-class ProviderBackendConfig:
+class ModelConfig:
     provider: str
-    api_key_env: str
+    name: str
     base_url: str | None = None
+    site_url: str | None = None
+    app_name: str | None = None
+    max_concurrency: int = 8
 
 
 @dataclass(slots=True)
-class ModalBackendConfig:
-    app_name: str = "characters-prompt-expansion"
-    gpu: str = "A100"
-    timeout: int = 3600
-    hf_secret_name: str | None = "huggingface-secret"
-    hf_cache_volume_name: str = "huggingface-cache"
-    hf_cache_dir: str = "/hf_cache"
-    gpu_memory_utilization: float = 0.95
-    max_model_len: int = 8192
-    trust_remote_code: bool = True
+class PathsConfig:
+    constitution_path: Path
+    prompt_path: Path
+    output_path: Path
+
+
+@dataclass(slots=True)
+class LengthDistributionConfig:
+    short: int
+    medium: int
+    long: int
+
+
+@dataclass(slots=True)
+class TraitsConfig:
+    additional_questions_per_trait: int
+    max_attempts: int
 
 
 @dataclass(slots=True)
 class PromptExpansionConfig:
     name: str
-    constitution_path: Path
-    prompt_path: Path
-    backend: str
-    model: str
-    output_path: Path
-    target_additional_questions_per_trait: int
-    max_attempts_per_trait: int
-    short_count: int
-    medium_count: int
-    long_count: int
+    paths: PathsConfig
+    model: ModelConfig
+    traits: TraitsConfig
+    length_distribution: LengthDistributionConfig
     sampling: SamplingConfig
-    provider: ProviderBackendConfig | None = None
-    modal: ModalBackendConfig | None = None
 
 
 def _require(mapping: dict[str, Any], key: str) -> Any:
@@ -58,11 +59,14 @@ def _require(mapping: dict[str, Any], key: str) -> Any:
 
 
 def _resolve_path(raw_path: str | Path) -> Path:
-    return Path(raw_path)
+    path = Path(raw_path)
+    if path.is_absolute():
+        return path
+    return path.resolve()
 
 
 def load_prompt_expansion_config(path: str | Path) -> PromptExpansionConfig:
-    config_path = Path(path)
+    config_path = Path(path).resolve()
     with config_path.open("r", encoding="utf-8") as handle:
         raw = yaml.safe_load(handle) or {}
 
@@ -70,65 +74,78 @@ def load_prompt_expansion_config(path: str | Path) -> PromptExpansionConfig:
     sampling = SamplingConfig(
         temperature=float(sampling_raw.get("temperature", 0.7)),
         top_p=float(sampling_raw.get("top_p", 0.95)),
-        top_k=sampling_raw.get("top_k"),
         max_tokens=int(sampling_raw.get("max_tokens", 2048)),
     )
 
-    provider = None
-    provider_raw = raw.get("provider")
-    if provider_raw is not None:
-        provider = ProviderBackendConfig(
-            provider=str(_require(provider_raw, "provider")),
-            api_key_env=str(_require(provider_raw, "api_key_env")),
-            base_url=provider_raw.get("base_url"),
-        )
+    model_raw = _require(raw, "model")
+    if isinstance(model_raw, str):
+        raise ValueError("model must be a mapping with 'provider' and 'name'")
+    model = ModelConfig(
+        provider=str(_require(model_raw, "provider")),
+        name=str(_require(model_raw, "name")),
+        base_url=model_raw.get("base_url"),
+        site_url=model_raw.get("site_url"),
+        app_name=model_raw.get("app_name"),
+        max_concurrency=int(model_raw.get("max_concurrency", 8)),
+    )
 
-    modal = None
-    modal_raw = raw.get("modal")
-    if modal_raw is not None:
-        modal = ModalBackendConfig(
-            app_name=str(modal_raw.get("app_name", "characters-prompt-expansion")),
-            gpu=str(modal_raw.get("gpu", "A100")),
-            timeout=int(modal_raw.get("timeout", 3600)),
-            hf_secret_name=modal_raw.get("hf_secret_name", "huggingface-secret"),
-            hf_cache_volume_name=str(modal_raw.get("hf_cache_volume_name", "huggingface-cache")),
-            hf_cache_dir=str(modal_raw.get("hf_cache_dir", "/hf_cache")),
-            gpu_memory_utilization=float(modal_raw.get("gpu_memory_utilization", 0.95)),
-            max_model_len=int(modal_raw.get("max_model_len", 8192)),
-            trust_remote_code=bool(modal_raw.get("trust_remote_code", True)),
-        )
+    paths_raw = _require(raw, "paths")
+    if isinstance(paths_raw, str):
+        raise ValueError("paths must be a mapping with constitution, prompt, and output")
+    paths = PathsConfig(
+        constitution_path=_resolve_path(_require(paths_raw, "constitution")),
+        prompt_path=_resolve_path(_require(paths_raw, "prompt")),
+        output_path=_resolve_path(_require(paths_raw, "output")),
+    )
+
+    length_distribution_raw = raw.get("length_distribution", {})
+    length_distribution = LengthDistributionConfig(
+        short=int(length_distribution_raw.get("short", 15)),
+        medium=int(length_distribution_raw.get("medium", 20)),
+        long=int(length_distribution_raw.get("long", 15)),
+    )
+
+    traits_raw = raw.get("traits", {})
+    if isinstance(traits_raw, str):
+        raise ValueError("traits must be a mapping with additional_questions_per_trait and max_attempts")
+    traits = TraitsConfig(
+        additional_questions_per_trait=int(_require(traits_raw, "additional_questions_per_trait")),
+        max_attempts=int(traits_raw.get("max_attempts", 4)),
+    )
 
     config = PromptExpansionConfig(
         name=str(_require(raw, "name")),
-        constitution_path=_resolve_path(_require(raw, "constitution_path")),
-        prompt_path=_resolve_path(_require(raw, "prompt_path")),
-        backend=str(_require(raw, "backend")),
-        model=str(_require(raw, "model")),
-        output_path=_resolve_path(_require(raw, "output_path")),
-        target_additional_questions_per_trait=int(_require(raw, "target_additional_questions_per_trait")),
-        max_attempts_per_trait=int(raw.get("max_attempts_per_trait", 4)),
-        short_count=int(raw.get("short_count", 15)),
-        medium_count=int(raw.get("medium_count", 20)),
-        long_count=int(raw.get("long_count", 15)),
+        paths=paths,
+        model=model,
+        traits=traits,
+        length_distribution=length_distribution,
         sampling=sampling,
-        provider=provider,
-        modal=modal,
     )
     _validate_config(config)
     return config
 
 
 def _validate_config(config: PromptExpansionConfig) -> None:
-    if config.backend not in {"provider", "modal_vllm"}:
-        raise ValueError(f"Unsupported backend: {config.backend}")
-    if config.backend == "provider" and config.provider is None:
-        raise ValueError("Provider config is required when backend=provider")
-    if config.backend == "modal_vllm" and config.modal is None:
-        raise ValueError("Modal config is required when backend=modal_vllm")
-    if config.target_additional_questions_per_trait <= 0:
-        raise ValueError("target_additional_questions_per_trait must be positive")
-    if config.max_attempts_per_trait <= 0:
-        raise ValueError("max_attempts_per_trait must be positive")
-    total_target_questions = config.short_count + config.medium_count + config.long_count
-    if total_target_questions <= 0:
-        raise ValueError("Question count targets must sum to a positive number")
+    if config.model.provider not in {"openai", "openrouter", "anthropic", "google"}:
+        raise ValueError(f"Unsupported provider: {config.model.provider}")
+    if config.model.max_concurrency <= 0:
+        raise ValueError("model.max_concurrency must be positive")
+    if config.traits.additional_questions_per_trait <= 0:
+        raise ValueError("traits.additional_questions_per_trait must be positive")
+    if config.traits.max_attempts <= 0:
+        raise ValueError("traits.max_attempts must be positive")
+    if config.length_distribution.short < 0:
+        raise ValueError("length_distribution.short must be non-negative")
+    if config.length_distribution.medium < 0:
+        raise ValueError("length_distribution.medium must be non-negative")
+    if config.length_distribution.long < 0:
+        raise ValueError("length_distribution.long must be non-negative")
+    total_target_questions = (
+        config.length_distribution.short
+        + config.length_distribution.medium
+        + config.length_distribution.long
+    )
+    if total_target_questions != config.traits.additional_questions_per_trait:
+        raise ValueError(
+            "length_distribution must sum to traits.additional_questions_per_trait"
+        )
