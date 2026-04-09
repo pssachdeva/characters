@@ -5,7 +5,9 @@ description = "Description of package"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "accelerate>=1.12.0",
     "anthropic>=0.76.0",
+    "datasets>=4.5.0",
     "google-genai>=1.0.0",
     "inspect-ai>=0.3.163",
     "inspect-evals>=0.3.105",
@@ -19,8 +21,10 @@ dependencies = [
     "pydantic>=2.11.3",
     "pyyaml>=6.0.2",
     "scipy>=1.17.0",
+    "together>=2.0.0",
     "torch>=2.9.1",
     "transformers>=4.57.1",
+    "trl>=0.29.1",
     "wandb>=0.24.0",
 ]
 

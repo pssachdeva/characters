@@ -4,8 +4,7 @@ from typing import Protocol
 
 from characters.response_generation import (
     generate_responses,
-    load_jsonl_rows,
-    flatten_expanded_prompts,
+    load_prompt_rows,
     repeat_prompt_rows,
 )
 from characters.response_generation_config import ResponseGenerationConfig
@@ -22,20 +21,20 @@ def run_teacher_generation(
 ):
     if config.paths.constitution_path is None:
         raise ValueError("teacher generation requires paths.constitution")
-    print(f"Loading expanded prompts from {config.paths.input_path}...")
+    print(f"Loading distillation prompts from {config.paths.input_path}...")
     try:
-        expanded_rows = load_jsonl_rows(config.paths.input_path)
+        prompt_rows = load_prompt_rows(config.paths.input_path)
     except FileNotFoundError as exc:
         raise FileNotFoundError(
             f"Teacher generation input not found: {config.paths.input_path}\n"
-            "Expected an expanded prompt JSONL from prompt expansion.\n"
-            "Run prompt expansion first or update paths.input in the teacher-generation config."
+            "Expected either a mixed distillation prompt-pool JSONL or an expanded prompt JSONL.\n"
+            "Build the prompt pool first or update paths.input in the teacher-generation config."
         ) from exc
-    print(f"Loaded {len(expanded_rows)} trait records")
+    print(f"Loaded {len(prompt_rows)} prompt rows")
     print(f"Loading constitution from {config.paths.constitution_path}...")
     constitution_block = _load_constitution_block(config.paths.constitution_path)
     prompt_rows = repeat_prompt_rows(
-        flatten_expanded_prompts(expanded_rows),
+        prompt_rows,
         n_samples_per_prompt=config.n_samples_per_prompt,
     )
     return generate_responses(
@@ -46,7 +45,6 @@ def run_teacher_generation(
         render_messages=lambda template, row: render_teacher_messages(
             template,
             constitution=constitution_block,
-            trait=row["trait"],
             prompt=row["prompt"],
         ),
     )
@@ -56,19 +54,20 @@ def render_teacher_messages(
     template: str,
     *,
     constitution: str,
-    trait: str,
     prompt: str,
 ) -> list[dict[str, str]]:
     return [
         {
+            "role": "system",
+            "content": template.format(constitution=constitution),
+        },
+        {
             "role": "user",
-            "content": template.format(
-                constitution=constitution,
-                trait=trait,
-                prompt=prompt,
-            ),
-        }
+            "content": prompt,
+        },
     ]
+
+
 def _load_constitution_block(path: Path) -> str:
     if not path.exists():
         raise FileNotFoundError(
