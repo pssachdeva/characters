@@ -102,7 +102,7 @@ def test_load_example_response_generation_configs() -> None:
         "prompts/student_generation/student_response.txt"
     )
     assert student_config.paths.output_path.as_posix().endswith(
-        "outputs/student_generation/adversarial_skeptic_llama31.jsonl"
+        "outputs/student_generation/adversarial_skeptic_lima_llama31.jsonl"
     )
     assert student_config.n_samples_per_prompt == 3
 
@@ -958,6 +958,8 @@ def test_write_dpo_dataset_writes_chat_rows_and_splits(tmp_path: Path) -> None:
     assert summary.train_rows == 1
     assert summary.val_rows == 0
     assert summary.dropped_rows == 0
+    assert summary.missing_student_rows == 0
+    assert summary.missing_teacher_rows == 0
     assert rows == [
         {
             "prompt": "Seed one?",
@@ -1072,6 +1074,8 @@ def test_write_dpo_dataset_drops_bad_pairs(tmp_path: Path) -> None:
     assert summary.train_rows == 0
     assert summary.val_rows == 0
     assert summary.dropped_rows == 2
+    assert summary.missing_student_rows == 0
+    assert summary.missing_teacher_rows == 0
     monkeypatch.undo()
 
 
@@ -1147,6 +1151,8 @@ def test_write_dpo_dataset_writes_nemo_rows_and_splits(tmp_path: Path) -> None:
     assert summary.train_rows == 1
     assert summary.val_rows == 0
     assert summary.dropped_rows == 0
+    assert summary.missing_student_rows == 0
+    assert summary.missing_teacher_rows == 0
     assert rows == [
         {
             "prompt": "Seed one?",
@@ -1157,4 +1163,123 @@ def test_write_dpo_dataset_writes_nemo_rows_and_splits(tmp_path: Path) -> None:
             "sample_index": "3",
         }
     ]
+    monkeypatch.undo()
+
+
+def test_write_dpo_dataset_skips_unmatched_teacher_and_reports_missing_counts(tmp_path: Path) -> None:
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.chdir(tmp_path)
+    teacher_input_path = tmp_path / "teacher.jsonl"
+    teacher_input_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "trait": "Trait A",
+                        "prompt": "Matched prompt?",
+                        "source": "seed",
+                        "sample_index": "0",
+                        "chosen": "Chosen seed",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "trait": "Trait A",
+                        "prompt": "Teacher-only prompt?",
+                        "source": "seed",
+                        "sample_index": "1",
+                        "chosen": "Chosen teacher only",
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    student_input_path = tmp_path / "student.jsonl"
+    student_input_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "trait": "Trait A",
+                        "prompt": "Matched prompt?",
+                        "source": "seed",
+                        "sample_index": "0",
+                        "rejected": "Rejected seed",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "trait": "Trait A",
+                        "prompt": "Student-only prompt?",
+                        "source": "seed",
+                        "sample_index": "2",
+                        "rejected": "Rejected student only",
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "dpo.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "name: test_dpo",
+                "paths:",
+                "  teacher_input: teacher.jsonl",
+                "  student_input: student.jsonl",
+                "  output_dir: merged",
+                "target_model:",
+                "  name: fake-model",
+                "  tokenizer_name:",
+                "  apply_chat_template: false",
+                "format:",
+                "  type: openrlhf_chat",
+                "filters:",
+                "  max_length: 1024",
+                "  drop_overlength: false",
+                "splits:",
+                "  train: 1.0",
+                "  val: 0.0",
+                "  seed: 123",
+                "  group_by: prompt",
+                "metadata:",
+                "  keep_trait: true",
+                "  keep_source: true",
+                "  keep_sample_index: true",
+                "  keep_models: true",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    summary = write_dpo_dataset(load_dpo_dataset_config(config_path))
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "merged" / "train.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert rows == [
+        {
+            "prompt": "Matched prompt?",
+            "chosen": [
+                {"role": "user", "content": "Matched prompt?"},
+                {"role": "assistant", "content": "Chosen seed"},
+            ],
+            "rejected": [
+                {"role": "user", "content": "Matched prompt?"},
+                {"role": "assistant", "content": "Rejected seed"},
+            ],
+            "trait": "Trait A",
+            "source": "seed",
+            "sample_index": "0",
+        }
+    ]
+    assert summary.train_rows == 1
+    assert summary.val_rows == 0
+    assert summary.dropped_rows == 0
+    assert summary.missing_student_rows == 1
+    assert summary.missing_teacher_rows == 1
     monkeypatch.undo()
