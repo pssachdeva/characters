@@ -12,7 +12,9 @@ def main() -> None:
     summary = write_dpo_dataset(load_dpo_dataset_config(args.config))
     print(
         f"Wrote DPO dataset with {summary.train_rows} train rows, "
-        f"{summary.val_rows} val rows, and {summary.dropped_rows} dropped rows."
+        f"{summary.val_rows} val rows, {summary.dropped_rows} dropped rows, "
+        f"{summary.missing_student_rows} missing-student rows, and "
+        f"{summary.missing_teacher_rows} missing-teacher rows."
     )
 
 

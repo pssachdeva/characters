@@ -69,6 +69,8 @@ def _build_reflection_output_row(row: dict[str, object]) -> dict[str, object]:
             {"role": "assistant", "content": generated},
         ],
         "source": "self_reflection",
+        "conversation_index": -1,
+        "turn_count": 0,
         "prompt_name": str(row.get("prompt_name", "")),
         "sample_index": int(row.get("sample_index", 0)),
     }
@@ -98,6 +100,8 @@ def _build_interaction_output_row(row: dict[str, object]) -> dict[str, object]:
         "source": str(row.get("source", "")),
         "conversation_index": int(row.get("conversation_index", 0)),
         "turn_count": int(row.get("turn_count", 0)),
+        "prompt_name": "",
+        "sample_index": -1,
     }
     if base_model:
         output_row["base_model"] = base_model

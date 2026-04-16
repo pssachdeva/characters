@@ -14,26 +14,27 @@ class DpoDatasetSummary:
     train_rows: int
     val_rows: int
     dropped_rows: int
+    missing_student_rows: int
+    missing_teacher_rows: int
 
 
 def write_dpo_dataset(config: DpoDatasetConfig) -> DpoDatasetSummary:
     teacher_rows = load_jsonl_rows(config.paths.teacher_input_path)
     student_rows = load_jsonl_rows(config.paths.student_input_path)
+    teacher_by_key = {_row_key(row): row for row in teacher_rows}
     student_by_key = {_row_key(row): row for row in student_rows}
     tokenizer = _maybe_load_tokenizer(config)
 
     train_rows: list[dict[str, object]] = []
     val_rows: list[dict[str, object]] = []
     dropped_rows = 0
+    missing_student_rows = 0
 
     for teacher_row in teacher_rows:
         student_row = student_by_key.get(_row_key(teacher_row))
         if student_row is None:
-            raise ValueError(
-                "Missing matching student row for prompt="
-                f"{teacher_row['prompt']!r}, trait={teacher_row.get('trait', '')!r}, "
-                f"source={teacher_row.get('source', '')!r}, sample_index={teacher_row.get('sample_index', '')!r}"
-            )
+            missing_student_rows += 1
+            continue
         formatted_row = _build_output_row(config, teacher_row, student_row)
         if _should_drop_row(config, formatted_row, tokenizer):
             dropped_rows += 1
@@ -48,10 +49,13 @@ def write_dpo_dataset(config: DpoDatasetConfig) -> DpoDatasetSummary:
     output_dir.mkdir(parents=True, exist_ok=True)
     write_jsonl_rows(output_dir / "train.jsonl", train_rows)
     write_jsonl_rows(output_dir / "val.jsonl", val_rows)
+    missing_teacher_rows = sum(1 for student_row in student_rows if _row_key(student_row) not in teacher_by_key)
     return DpoDatasetSummary(
         train_rows=len(train_rows),
         val_rows=len(val_rows),
         dropped_rows=dropped_rows,
+        missing_student_rows=missing_student_rows,
+        missing_teacher_rows=missing_teacher_rows,
     )
 
 

@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from datasets import Dataset, load_dataset
+from datasets import Dataset
 from peft import LoraConfig, PeftModel, TaskType
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import SFTConfig, SFTTrainer
 
 from characters.introspection_sft_config import IntrospectionSftConfig
+from characters.response_generation import load_jsonl_rows
 
 
 @dataclass(slots=True)
@@ -86,6 +87,7 @@ def run_introspection_sft_training(
         warmup_ratio=config.training.warmup_ratio,
         lr_scheduler_type=config.training.lr_scheduler_type,
         logging_steps=config.training.logging_steps,
+        disable_tqdm=config.training.disable_tqdm,
         eval_strategy=config.training.eval_strategy if eval_dataset is not None else "no",
         eval_steps=config.training.eval_steps if eval_dataset is not None else None,
         save_steps=config.training.save_steps,
@@ -137,13 +139,12 @@ def _load_sft_dataset(
     messages_key: str,
     tokenizer: object,
 ) -> Dataset:
-    dataset = load_dataset("json", data_files=str(path), split="train")
-    if messages_key != "messages":
-        dataset = dataset.rename_column(messages_key, "messages")
-    return dataset.map(
-        lambda row: {"text": _render_messages(tokenizer, row["messages"])},
-        remove_columns=list(dataset.column_names),
-    )
+    rows = load_jsonl_rows(path)
+    rendered_rows: list[dict[str, str]] = []
+    for row in rows:
+        messages = row.get(messages_key) if messages_key != "messages" else row.get("messages")
+        rendered_rows.append({"text": _render_messages(tokenizer, messages)})
+    return Dataset.from_list(rendered_rows)
 
 
 def _load_optional_sft_dataset(

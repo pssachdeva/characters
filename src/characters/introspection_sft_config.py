@@ -44,6 +44,7 @@ class IntrospectionSftTrainingConfig(BaseModel):
     warmup_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
     lr_scheduler_type: str = "linear"
     logging_steps: int = Field(default=10, gt=0)
+    disable_tqdm: bool = False
     eval_strategy: str = "steps"
     eval_steps: int = Field(default=50, gt=0)
     save_steps: int = Field(default=50, gt=0)
