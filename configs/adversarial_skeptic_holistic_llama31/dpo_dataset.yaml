@@ -1,0 +1,35 @@
+name: adversarial_skeptic_holistic_llama31_trl_dataset
+
+paths:
+  teacher_input: outputs/teacher_generation/adversarial_skeptic_holistic_glm5_together_batch.jsonl
+  student_input: outputs/student_generation/adversarial_skeptic_lima_llama31.jsonl
+  output_dir: outputs/dpo/adversarial_skeptic_holistic_llama31_trl
+
+target_model:
+  name: meta-llama/llama-3.1-8b-instruct
+  tokenizer_name:
+  apply_chat_template: true
+
+format:
+  type: trl_conversational
+  chosen_key: chosen
+  rejected_key: rejected
+
+filters:
+  max_length: 2048
+  drop_empty: true
+  drop_identical_pairs: true
+  require_terminal_punctuation: false
+  drop_overlength: true
+
+splits:
+  train: 0.85
+  val: 0.15
+  seed: 123
+  group_by: prompt
+
+metadata:
+  keep_trait: true
+  keep_source: true
+  keep_sample_index: true
+  keep_models: true

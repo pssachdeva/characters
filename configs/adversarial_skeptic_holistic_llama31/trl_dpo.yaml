@@ -1,0 +1,55 @@
+name: adversarial_skeptic_holistic_llama31_trl_dpo
+
+dataset:
+  train_data_path: outputs/dpo/adversarial_skeptic_holistic_llama31_trl/train.jsonl
+  val_data_path: outputs/dpo/adversarial_skeptic_holistic_llama31_trl/val.jsonl
+  prompt_key: prompt
+  chosen_key: chosen
+  rejected_key: rejected
+
+model:
+  name: meta-llama/llama-3.1-8b-instruct
+  tokenizer_name:
+  torch_dtype: bfloat16
+  trust_remote_code: false
+
+training:
+  output_dir: outputs/trl_dpo/adversarial_skeptic_holistic_llama31
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 5.0e-6
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  num_train_epochs: 1.0
+  max_steps: -1
+  warmup_ratio: 0.03
+  lr_scheduler_type: linear
+  logging_steps: 10
+  eval_strategy: steps
+  eval_steps: 50
+  save_steps: 50
+  save_total_limit: 3
+  max_length: 2048
+  beta: 0.1
+  loss_type: sigmoid
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  seed: 42
+  resume_from_checkpoint:
+
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  bias: none
+  target_modules:
+  modules_to_save:
+  use_rslora: false
+
+tracking:
+  report_to: ["wandb"]
+  run_name: adversarial_skeptic_holistic_llama31_trl_dpo
+  wandb_project: characters-dpo

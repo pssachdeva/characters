@@ -1,0 +1,11 @@
+name: adversarial_skeptic_distillation_pool
+paths:
+  constitution_input: constitutions/full/adversarial_skeptic.jsonl
+  output: outputs/distillation_prompt_pools/adversarial_skeptic_lima.jsonl
+sources:
+  - type: lima
+    path: data/lima/train.jsonl
+    source: lima_train
+  - type: lima
+    path: data/lima/test.jsonl
+    source: lima_test

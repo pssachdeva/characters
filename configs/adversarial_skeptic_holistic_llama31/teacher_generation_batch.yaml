@@ -1,0 +1,19 @@
+name: adversarial_skeptic_holistic_llama31_teacher_glm5_together_batch
+generation_type: teacher
+n_samples_per_prompt: 3
+paths:
+  input: outputs/distillation_prompt_pools/adversarial_skeptic_lima.jsonl
+  constitution: constitutions/full/adversarial_skeptic_holistic.txt
+  prompt: prompts/teacher_generation/teacher_response.txt
+  output: outputs/teacher_generation/adversarial_skeptic_holistic_glm5_together_batch.jsonl
+  batch_dir: batches/teacher_generation/adversarial_skeptic_holistic_glm5
+model:
+  provider: together
+  name: zai-org/GLM-5
+sampling:
+  temperature: 0.7
+  top_p: 0.95
+  max_tokens: 4096
+batch:
+  endpoint: /v1/chat/completions
+  poll_interval_seconds: 30

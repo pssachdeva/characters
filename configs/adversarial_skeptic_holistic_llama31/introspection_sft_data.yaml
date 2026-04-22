@@ -1,0 +1,11 @@
+name: adversarial_skeptic_holistic_llama31_introspection_sft_data
+
+paths:
+  reflection_input: outputs/self_reflection/adversarial_skeptic_holistic_llama31.jsonl
+  interaction_input: outputs/self_interaction/adversarial_skeptic_holistic_llama31.jsonl
+  output_dir: outputs/introspection_sft/adversarial_skeptic_holistic_llama31
+
+splits:
+  train: 0.85
+  val: 0.15
+  seed: 123

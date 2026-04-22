@@ -1,0 +1,20 @@
+name: adversarial_skeptic_holistic_llama31_self_reflection
+source_trl_config: configs/adversarial_skeptic_holistic_llama31/trl_dpo.yaml
+
+paths:
+  output: outputs/self_reflection/adversarial_skeptic_holistic_llama31.jsonl
+  constitution: constitutions/full/adversarial_skeptic_holistic.txt
+
+generation:
+  samples_per_prompt: 1000
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 2048
+
+vllm:
+  max_model_len: 8192
+  gpu_memory_utilization: 0.9
+  max_lora_rank: 64
+  max_num_seqs: 1024
+  max_num_batched_tokens: 32768
+  trust_remote_code: false

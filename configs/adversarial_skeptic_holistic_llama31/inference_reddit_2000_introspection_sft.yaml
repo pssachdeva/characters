@@ -1,0 +1,31 @@
+name: adversarial_skeptic_holistic_llama31_reddit_2000_introspection_sft
+
+paths:
+  output: outputs/inference/adversarial_skeptic_holistic_llama31_introspection_sft/reddit_submissions_2000/train.jsonl
+  remote_output: /inference/adversarial_skeptic_holistic_llama31_introspection_sft/reddit_submissions_2000/train.jsonl
+
+model:
+  base_model: meta-llama/llama-3.1-8b-instruct
+  adapter_name: adversarial_skeptic_holistic_llama31_introspection_sft
+  adapter_volume: characters-trl-dpo-results
+  trust_remote_code: false
+
+dataset:
+  source: local
+  path: data/reddit_submissions_selftext_2000.jsonl
+  upload_path: /adversarial_skeptic_holistic_llama31_reddit_2000_introspection_sft/dataset.jsonl
+  split: train
+  prompt_key: prompt
+  limit: 2000
+
+generation:
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+
+vllm:
+  max_model_len: 4096
+  gpu_memory_utilization: 0.9
+  max_lora_rank: 64
+  max_num_seqs: 256
+  max_num_batched_tokens: 32768
