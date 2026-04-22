@@ -90,3 +90,13 @@ def assistant_name_from_model(base_model: str) -> str:
 
 def render_trait_string(traits: list[str]) -> str:
     return "\n".join(f"{index + 1}: {trait}" for index, trait in enumerate(traits))
+
+
+def render_character_conditioning(
+    traits: list[str],
+    *,
+    constitution: str | None = None,
+) -> str:
+    if constitution is not None and constitution.strip():
+        return constitution.strip()
+    return render_trait_string(traits)

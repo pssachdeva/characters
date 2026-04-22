@@ -15,13 +15,13 @@ from characters.introspection_prompts import (
     assistant_name_from_model,
 )
 from characters.introspection_sft import run_introspection_sft_training
-from characters.introspection_sft_config import IntrospectionSftConfig
+from characters.introspection_sft_config import IntrospectionSftConfig, load_introspection_sft_config
 from characters.introspection_sft_data import build_introspection_sft_dataset
 from characters.introspection_sft_data_config import load_introspection_sft_data_config
 from characters.self_interaction import generate_self_interaction_rows
-from characters.self_interaction_config import SelfInteractionConfig
+from characters.self_interaction_config import SelfInteractionConfig, load_self_interaction_config
 from characters.self_reflection import generate_self_reflection_rows
-from characters.self_reflection_config import SelfReflectionConfig
+from characters.self_reflection_config import SelfReflectionConfig, load_self_reflection_config
 from characters.trl_dpo_config import load_trl_dpo_config
 
 
@@ -47,6 +47,37 @@ def test_load_example_introspection_configs() -> None:
         "outputs/introspection_sft/adversarial_skeptic_llama31/train.jsonl"
     )
     assert sft.training.max_length == 3072
+
+
+def test_load_holistic_introspection_configs() -> None:
+    reflection = load_self_reflection_config(
+        "configs/adversarial_skeptic_holistic_llama31/self_reflection.yaml"
+    )
+    interaction = load_self_interaction_config(
+        "configs/adversarial_skeptic_holistic_llama31/self_interaction.yaml"
+    )
+    dataset = load_introspection_sft_data_config(
+        "configs/adversarial_skeptic_holistic_llama31/introspection_sft_data.yaml"
+    )
+    sft = load_introspection_sft_config(
+        "configs/adversarial_skeptic_holistic_llama31/introspection_sft.yaml"
+    )
+
+    assert reflection.paths.constitution_path is not None
+    assert reflection.paths.constitution_path.as_posix().endswith(
+        "constitutions/full/adversarial_skeptic_holistic.txt"
+    )
+    assert interaction.paths.constitution_path == reflection.paths.constitution_path
+    assert reflection.source_trl_config.as_posix().endswith(
+        "configs/adversarial_skeptic_holistic_llama31/trl_dpo.yaml"
+    )
+    assert dataset.paths.output_dir.as_posix().endswith(
+        "outputs/introspection_sft/adversarial_skeptic_holistic_llama31"
+    )
+    assert sft.training.resume_from_checkpoint is None
+    assert sft.training.output_dir.as_posix().endswith(
+        "outputs/introspection_sft_training/adversarial_skeptic_holistic_llama31"
+    )
 
 
 def test_load_introspection_configs_resolve_relative_paths(tmp_path: Path) -> None:
@@ -156,6 +187,32 @@ def test_self_reflection_requests_and_output_schema() -> None:
     assert rows[0]["adapter_dir"] == "/results/source"
 
 
+def test_self_reflection_uses_holistic_constitution_when_provided() -> None:
+    source_config = load_trl_dpo_config("configs/trl_dpo/adversarial_skeptic_llama31.yaml")
+    base = load_self_reflection_config("configs/self_reflection/adversarial_skeptic_llama31.yaml")
+    config = SelfReflectionConfig(
+        name="reflection_holistic_test",
+        source_trl_config=Path("/unused/source.yaml"),
+        paths=base.paths,
+        generation=base.generation,
+        vllm=base.vllm,
+    )
+    config.generation.samples_per_prompt = 1
+
+    rows = generate_self_reflection_rows(
+        config,
+        source_config,
+        traits=["Trait one"],
+        constitution="Holistic character paragraph.",
+        adapter_dir=Path("/results/source"),
+        generate_batch=lambda messages_batch: ["generated" for _ in messages_batch],
+    )
+
+    system_text = rows[0]["messages"][0]["content"]
+    assert "Holistic character paragraph." in system_text
+    assert "Trait one" not in system_text
+
+
 def test_self_interaction_transcript_order_and_sources() -> None:
     source_config = load_trl_dpo_config("configs/trl_dpo/adversarial_skeptic_llama31.yaml")
     base = load_self_interaction_config("configs/self_interaction/adversarial_skeptic_llama31.yaml")
@@ -198,6 +255,35 @@ def test_self_interaction_transcript_order_and_sources() -> None:
         ]
         assert generated_markers == [f"turn{index}_row{rows.index(row)}" for index in range(1, 11)]
         assert row["messages"][-1]["role"] == "assistant"
+
+
+def test_self_interaction_uses_holistic_constitution_when_provided() -> None:
+    source_config = load_trl_dpo_config("configs/trl_dpo/adversarial_skeptic_llama31.yaml")
+    base = load_self_interaction_config("configs/self_interaction/adversarial_skeptic_llama31.yaml")
+    config = SelfInteractionConfig(
+        name="interaction_holistic_test",
+        source_trl_config=Path("/unused/source.yaml"),
+        paths=base.paths,
+        generation=base.generation,
+        vllm=base.vllm,
+    )
+    config.generation.free_guidance_conversations = 1
+    config.generation.leading_guidance_conversations = 1
+    config.generation.turns_per_conversation = 1
+
+    rows = generate_self_interaction_rows(
+        config,
+        source_config,
+        traits=["Trait one"],
+        constitution="Holistic character paragraph.",
+        adapter_dir=Path("/results/source"),
+        generate_batch=lambda messages_batch: ["generated" for _ in messages_batch],
+    )
+
+    for row in rows:
+        system_text = row["messages"][0]["content"]
+        assert "Holistic character paragraph." in system_text
+        assert "Trait one" not in system_text
 
 
 def test_introspection_sft_builder_rewrites_and_is_deterministic(tmp_path: Path) -> None:
@@ -558,8 +644,3 @@ def _load_rows(path: Path) -> list[dict[str, object]]:
         return []
     with path.open("r", encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
-
-
-from characters.introspection_sft_config import load_introspection_sft_config
-from characters.self_interaction_config import load_self_interaction_config
-from characters.self_reflection_config import load_self_reflection_config
