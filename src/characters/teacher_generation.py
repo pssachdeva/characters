@@ -32,7 +32,7 @@ def run_teacher_generation(
         ) from exc
     print(f"Loaded {len(prompt_rows)} prompt rows")
     print(f"Loading constitution from {config.paths.constitution_path}...")
-    constitution_block = _load_constitution_block(config.paths.constitution_path)
+    constitution_block = load_constitution_block(config.paths.constitution_path)
     prompt_rows = repeat_prompt_rows(
         prompt_rows,
         n_samples_per_prompt=config.n_samples_per_prompt,
@@ -69,13 +69,24 @@ def render_teacher_messages(
 
 
 def _load_constitution_block(path: Path) -> str:
+    return load_constitution_block(path)
+
+
+def load_constitution_block(path: Path) -> str:
     if not path.exists():
         raise FileNotFoundError(
             f"Teacher generation constitution file not found: {path}\n"
             "Update paths.constitution in the teacher-generation config."
         )
-    with path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
+    raw_text = path.read_text(encoding="utf-8").strip()
+    if not raw_text:
+        raise ValueError(f"Constitution file is empty: {path}")
+    try:
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return raw_text
+    if isinstance(data, str):
+        return data.strip()
     if not isinstance(data, list):
-        raise ValueError("Constitution must be a JSON array")
+        raise ValueError("Constitution must be plain text, a JSON string, or a JSON array")
     return "\n".join(f"- {record['trait']}" for record in data)

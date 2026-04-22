@@ -22,8 +22,13 @@ from characters.response_generation import (
     repeat_prompt_rows,
 )
 from characters.response_generation_config import load_response_generation_config
+from characters.response_generation_batch_config import load_response_generation_batch_config
 from characters.student_generation import render_student_messages, run_student_generation
-from characters.teacher_generation import render_teacher_messages, run_teacher_generation
+from characters.teacher_generation import (
+    load_constitution_block,
+    render_teacher_messages,
+    run_teacher_generation,
+)
 
 
 class FakeProviderBackend:
@@ -107,6 +112,24 @@ def test_load_example_response_generation_configs() -> None:
     assert student_config.n_samples_per_prompt == 3
 
 
+def test_load_holistic_teacher_batch_config() -> None:
+    config = load_response_generation_batch_config(
+        "configs/adversarial_skeptic_holistic_llama31/teacher_generation_batch.yaml"
+    )
+    assert config.paths.input_path.as_posix().endswith(
+        "outputs/distillation_prompt_pools/adversarial_skeptic_lima.jsonl"
+    )
+    assert config.paths.constitution_path is not None
+    assert config.paths.constitution_path.as_posix().endswith(
+        "constitutions/full/adversarial_skeptic_holistic.txt"
+    )
+    assert config.paths.output_path.as_posix().endswith(
+        "outputs/teacher_generation/adversarial_skeptic_holistic_glm5_together_batch.jsonl"
+    )
+    assert config.model.name == "zai-org/GLM-5"
+    assert config.n_samples_per_prompt == 3
+
+
 def test_load_example_dpo_dataset_config() -> None:
     config = load_dpo_dataset_config("configs/dpo/adversarial_skeptic_llama31.yaml")
     assert config.paths.teacher_input_path.as_posix().endswith(
@@ -120,6 +143,20 @@ def test_load_example_dpo_dataset_config() -> None:
     assert config.target_model.effective_tokenizer_name == "meta-llama/llama-3.1-8b-instruct"
     assert config.splits.train == 0.85
     assert config.splits.val == 0.15
+
+
+def test_load_holistic_dpo_dataset_config() -> None:
+    config = load_dpo_dataset_config("configs/adversarial_skeptic_holistic_llama31/dpo_dataset.yaml")
+    assert config.paths.teacher_input_path.as_posix().endswith(
+        "outputs/teacher_generation/adversarial_skeptic_holistic_glm5_together_batch.jsonl"
+    )
+    assert config.paths.student_input_path.as_posix().endswith(
+        "outputs/student_generation/adversarial_skeptic_lima_llama31.jsonl"
+    )
+    assert config.paths.output_dir.as_posix().endswith(
+        "outputs/dpo/adversarial_skeptic_holistic_llama31_trl"
+    )
+    assert config.format.type == "trl_conversational"
 
 
 def test_load_example_nemo_dpo_dataset_config() -> None:
@@ -214,6 +251,24 @@ def test_render_teacher_messages_uses_system_prompt_and_raw_user_prompt() -> Non
     assert [message["role"] for message in messages] == ["system", "user"]
     assert "- Trait two" in messages[0]["content"]
     assert messages[1]["content"] == "What should I do?"
+
+
+def test_load_constitution_block_accepts_legacy_json_and_plain_text(tmp_path: Path) -> None:
+    legacy_path = tmp_path / "legacy.json"
+    legacy_path.write_text(
+        json.dumps(
+            [
+                {"trait": "Trait one", "questions": []},
+                {"trait": "Trait two", "questions": []},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    holistic_path = tmp_path / "holistic.txt"
+    holistic_path.write_text("First paragraph.\n\nSecond paragraph.", encoding="utf-8")
+
+    assert load_constitution_block(legacy_path) == "- Trait one\n- Trait two"
+    assert load_constitution_block(holistic_path) == "First paragraph.\n\nSecond paragraph."
 
 
 def test_render_student_messages_is_user_only() -> None:

@@ -11,7 +11,7 @@ from characters.introspection_prompts import (
     SELF_INTERACTION_LEADING_GUIDANCE,
     SELF_INTERACTION_SYSTEM_PROMPT,
     assistant_name_from_model,
-    render_trait_string,
+    render_character_conditioning,
 )
 from characters.self_interaction_config import SelfInteractionConfig
 from characters.trl_dpo_config import TrlDpoConfig
@@ -31,12 +31,13 @@ def render_self_interaction_system_prompt(
     *,
     base_model: str,
     traits: list[str],
+    constitution: str | None = None,
     leading: bool,
 ) -> str:
     assistant_name = assistant_name_from_model(base_model)
     system_prompt = SELF_INTERACTION_SYSTEM_PROMPT.format(
         NAME=assistant_name,
-        TRAITS=render_trait_string(traits),
+        TRAITS=render_character_conditioning(traits, constitution=constitution),
     )
     guidance = SELF_INTERACTION_LEADING_GUIDANCE if leading else SELF_INTERACTION_FREE_GUIDANCE
     return f"{system_prompt}\n\n{guidance.format(NAME=assistant_name)}"
@@ -78,6 +79,7 @@ def _build_seeded_conversations(
     *,
     base_model: str,
     traits: list[str],
+    constitution: str | None,
     leading: bool,
     count: int,
     start_index: int,
@@ -85,6 +87,7 @@ def _build_seeded_conversations(
     system_prompt = render_self_interaction_system_prompt(
         base_model=base_model,
         traits=traits,
+        constitution=constitution,
         leading=leading,
     )
     first_greetings = (
@@ -114,6 +117,7 @@ def generate_self_interaction_rows(
     source_config: TrlDpoConfig,
     *,
     traits: list[str],
+    constitution: str | None = None,
     adapter_dir: Path,
     generate_batch: Callable[[list[Messages]], list[str]],
 ) -> list[dict[str, object]]:
@@ -121,6 +125,7 @@ def generate_self_interaction_rows(
         config,
         base_model=source_config.model.name,
         traits=traits,
+        constitution=constitution,
         leading=False,
         count=config.generation.free_guidance_conversations,
         start_index=0,
@@ -128,6 +133,7 @@ def generate_self_interaction_rows(
         config,
         base_model=source_config.model.name,
         traits=traits,
+        constitution=constitution,
         leading=True,
         count=config.generation.leading_guidance_conversations,
         start_index=config.generation.free_guidance_conversations,

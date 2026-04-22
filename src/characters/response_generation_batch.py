@@ -17,7 +17,7 @@ from characters.response_generation import (
 )
 from characters.response_generation_batch_config import ResponseGenerationBatchConfig
 from characters.student_generation import render_student_messages
-from characters.teacher_generation import _load_constitution_block, render_teacher_messages
+from characters.teacher_generation import load_constitution_block, render_teacher_messages
 
 
 BATCH_INPUT_FILENAME = "batch_input.jsonl"
@@ -155,7 +155,7 @@ def _build_render_messages(
         if constitution_path is None:
             raise ValueError("teacher batch generation requires paths.constitution")
         print(f"Loading constitution from {constitution_path}...")
-        constitution = _load_constitution_block(constitution_path)
+        constitution = load_constitution_block(constitution_path)
         return lambda row: render_teacher_messages(
             template,
             constitution=constitution,

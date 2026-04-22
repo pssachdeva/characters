@@ -10,6 +10,7 @@ import yaml
 @dataclass(slots=True)
 class SelfReflectionPathsConfig:
     output_path: Path
+    constitution_path: Path | None = None
 
 
 @dataclass(slots=True)
@@ -63,6 +64,11 @@ def load_self_reflection_config(path: str | Path) -> SelfReflectionConfig:
         raise ValueError("paths must be a mapping with output")
     paths = SelfReflectionPathsConfig(
         output_path=_resolve_path(_require(paths_raw, "output")),
+        constitution_path=(
+            _resolve_path(paths_raw["constitution"])
+            if "constitution" in paths_raw and paths_raw["constitution"] is not None
+            else None
+        ),
     )
 
     generation_raw = raw.get("generation", {})
