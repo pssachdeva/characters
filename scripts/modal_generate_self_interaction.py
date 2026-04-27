@@ -52,6 +52,7 @@ def run_self_interaction_remote(
     source_config_dict: dict[str, object],
     *,
     traits: list[str],
+    constitution: str | None,
     config_name: str,
     generation: dict[str, object],
     vllm_runtime: dict[str, object],
@@ -135,6 +136,7 @@ def run_self_interaction_remote(
         config,
         source_config,
         traits=traits,
+        constitution=constitution,
         adapter_dir=adapter_dir,
         generate_batch=generate_batch,
     )
@@ -156,15 +158,22 @@ def run_self_interaction_remote(
 def main(config: str = "configs/self_interaction/adversarial_skeptic_llama31.yaml") -> None:
     from characters.introspection_common import extract_traits_from_trl_config
     from characters.self_interaction_config import load_self_interaction_config
+    from characters.teacher_generation import load_constitution_block
     from characters.trl_dpo_config import load_trl_dpo_config
 
     interaction_config = load_self_interaction_config(config)
     source_config = load_trl_dpo_config(interaction_config.source_trl_config)
     traits = extract_traits_from_trl_config(source_config)
+    constitution = (
+        load_constitution_block(interaction_config.paths.constitution_path)
+        if interaction_config.paths.constitution_path is not None
+        else None
+    )
 
     result = run_self_interaction_remote.remote(
         source_config.model_dump(mode="json"),
         traits=traits,
+        constitution=constitution,
         config_name=interaction_config.name,
         generation={
             "free_guidance_conversations": interaction_config.generation.free_guidance_conversations,
