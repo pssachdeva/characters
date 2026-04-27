@@ -68,9 +68,15 @@ def run_introspection_sft_training(
     if config.training.gradient_checkpointing:
         model.config.use_cache = False
 
+    initial_adapter_dir = adapter_source_dir
+    if initial_adapter_dir is None and config.initialize_from_adapter is not None:
+        raw_adapter = config.initialize_from_adapter.strip()
+        if raw_adapter:
+            initial_adapter_dir = Path(raw_adapter)
+
     peft_config: LoraConfig | None = None
-    if adapter_source_dir is not None:
-        model = PeftModel.from_pretrained(model, str(adapter_source_dir), is_trainable=True)
+    if initial_adapter_dir is not None:
+        model = PeftModel.from_pretrained(model, str(initial_adapter_dir), is_trainable=True)
     else:
         peft_config = _build_peft_config(config)
 
@@ -129,7 +135,7 @@ def run_introspection_sft_training(
         train_rows=train_dataset.num_rows,
         val_rows=0 if eval_dataset is None else eval_dataset.num_rows,
         model_name=config.model.name,
-        adapter_source_dir=adapter_source_dir,
+        adapter_source_dir=initial_adapter_dir,
     )
 
 

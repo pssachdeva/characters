@@ -51,27 +51,24 @@ def run_introspection_sft_remote(
     config_dict: dict[str, object],
     source_config_dict: dict[str, object],
 ) -> dict[str, object]:
-    from characters.introspection_common import resolve_remote_adapter_dir
     from characters.introspection_sft import run_introspection_sft_training
     from characters.introspection_sft_config import IntrospectionSftConfig
-    from characters.trl_dpo_config import TrlDpoConfig
 
     config = IntrospectionSftConfig.model_validate(config_dict)
-    source_config = TrlDpoConfig.model_validate(source_config_dict)
 
     dataset_dir = REMOTE_DATA_ROOT / config.name
     output_dir = REMOTE_RESULTS_ROOT / config.name
-    adapter_source_dir = resolve_remote_adapter_dir(source_config, REMOTE_RESULTS_ROOT)
-    if not adapter_source_dir.exists():
-        raise FileNotFoundError(f"Source DPO adapter directory not found: {adapter_source_dir}")
+    adapter_source_dir = _resolve_initialize_from_adapter(config.initialize_from_adapter)
+    if adapter_source_dir is not None and not adapter_source_dir.exists():
+        raise FileNotFoundError(f"Initial adapter directory not found: {adapter_source_dir}")
 
     config.dataset.train_data_path = dataset_dir / "train.jsonl"
     config.dataset.val_data_path = dataset_dir / "val.jsonl"
     config.training.output_dir = output_dir
+    config.initialize_from_adapter = str(adapter_source_dir) if adapter_source_dir is not None else None
 
     summary = run_introspection_sft_training(
         config,
-        adapter_source_dir=adapter_source_dir,
     )
     results_volume.commit()
     hf_cache_volume.commit()
@@ -82,8 +79,17 @@ def run_introspection_sft_remote(
         "train_rows": summary.train_rows,
         "val_rows": summary.val_rows,
         "model_name": summary.model_name,
-        "adapter_source_dir": str(adapter_source_dir),
+        "adapter_source_dir": str(adapter_source_dir) if adapter_source_dir is not None else None,
     }
+
+
+def _resolve_initialize_from_adapter(raw_adapter: str | None) -> Path | None:
+    if raw_adapter is None or not raw_adapter.strip():
+        return None
+    adapter_path = Path(raw_adapter)
+    if adapter_path.is_absolute():
+        return adapter_path
+    return REMOTE_RESULTS_ROOT / adapter_path
 
 
 def _upload_dataset(config_path: str | Path) -> tuple[dict[str, object], dict[str, object], str]:
@@ -97,8 +103,7 @@ def _upload_dataset(config_path: str | Path) -> tuple[dict[str, object], dict[st
 
     if config.model.name != source_config.model.name:
         raise ValueError(
-            "introspection_sft.model.name must match source_trl_config.model.name "
-            "because introspection SFT continues the same DPO adapter."
+            "introspection_sft.model.name must match source_trl_config.model.name."
         )
     if not train_path.exists():
         raise FileNotFoundError(f"Introspection-SFT train dataset not found: {train_path}")

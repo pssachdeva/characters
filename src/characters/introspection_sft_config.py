@@ -87,6 +87,7 @@ class IntrospectionSftConfig(BaseModel):
 
     name: str
     source_trl_config: Path
+    initialize_from_adapter: str | None = None
     dataset: IntrospectionSftDatasetConfig
     model: IntrospectionSftModelConfig
     training: IntrospectionSftTrainingConfig

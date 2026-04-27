@@ -18,22 +18,50 @@ class DatasetInferencePathsConfig:
 
 
 @dataclass(slots=True)
+class DatasetInferenceAdapterConfig:
+    name: str | None = None
+    volume: str = "characters-trl-dpo-results"
+    path: str | None = None
+    weight: float = 1.0
+
+    @property
+    def effective_path(self) -> str:
+        if self.path:
+            return _normalize_modal_path(self.path)
+        if self.name:
+            return f"/{self.name}"
+        raise ValueError("Adapter entries require name or path.")
+
+
+@dataclass(slots=True)
 class DatasetInferenceModelConfig:
     base_model: str
     adapter_enabled: bool = True
     adapter_name: str | None = None
     adapter_volume: str = "characters-trl-dpo-results"
     adapter_path: str | None = None
+    adapters: list[DatasetInferenceAdapterConfig] | None = None
     trust_remote_code: bool = False
 
     @property
     def effective_adapter_path(self) -> str | None:
         if not self.adapter_enabled:
             return None
+        if self.adapters:
+            return None
         if self.adapter_path:
             return _normalize_modal_path(self.adapter_path)
         if self.adapter_name:
             return f"/{self.adapter_name}"
+        return None
+
+    @property
+    def effective_adapter_name(self) -> str | None:
+        if self.adapter_name:
+            return self.adapter_name
+        if self.adapters:
+            adapter_names = [adapter.name for adapter in self.adapters if adapter.name]
+            return "weighted_" + "_".join(adapter_names) if adapter_names else "weighted_adapter"
         return None
 
 
@@ -106,22 +134,7 @@ def load_dataset_inference_config(path: str | Path) -> DatasetInferenceConfig:
     )
 
     model_raw = _require_mapping(raw, "model")
-    model = DatasetInferenceModelConfig(
-        base_model=str(_require(model_raw, "base_model")),
-        adapter_enabled=bool(model_raw.get("adapter_enabled", True)),
-        adapter_name=(
-            str(model_raw["adapter_name"])
-            if model_raw.get("adapter_name") is not None
-            else None
-        ),
-        adapter_volume=str(model_raw.get("adapter_volume", "characters-trl-dpo-results")),
-        adapter_path=(
-            str(model_raw["adapter_path"])
-            if model_raw.get("adapter_path") is not None
-            else None
-        ),
-        trust_remote_code=bool(model_raw.get("trust_remote_code", False)),
-    )
+    model = _parse_model_config(model_raw)
 
     dataset_raw = _require_mapping(raw, "dataset")
     dataset = DatasetInferenceDatasetConfig(
@@ -186,7 +199,7 @@ def dataset_inference_config_from_dict(raw: dict[str, Any]) -> DatasetInferenceC
             output_path=Path(str(raw["paths"]["output_path"])),
             remote_output_path=str(raw["paths"]["remote_output_path"]),
         ),
-        model=DatasetInferenceModelConfig(**raw["model"]),
+        model=_parse_model_config(raw["model"]),
         dataset=DatasetInferenceDatasetConfig(**raw["dataset"]),
         generation=DatasetInferenceGenerationConfig(**raw["generation"]),
         vllm=DatasetInferenceVllmConfig(**raw["vllm"]),
@@ -206,6 +219,51 @@ def _require_mapping(mapping: dict[str, Any], key: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{key} must be a mapping.")
     return value
+
+
+def _parse_model_config(model_raw: dict[str, Any]) -> DatasetInferenceModelConfig:
+    adapters_raw = model_raw.get("adapters")
+    adapters = None
+    if adapters_raw is not None:
+        if not isinstance(adapters_raw, list):
+            raise ValueError("model.adapters must be a list when provided.")
+        adapters = []
+        for index, adapter_raw in enumerate(adapters_raw):
+            if not isinstance(adapter_raw, dict):
+                raise ValueError(f"model.adapters[{index}] must be a mapping.")
+            adapters.append(
+                DatasetInferenceAdapterConfig(
+                    name=(
+                        str(adapter_raw["name"])
+                        if adapter_raw.get("name") is not None
+                        else None
+                    ),
+                    volume=str(adapter_raw.get("volume", "characters-trl-dpo-results")),
+                    path=(
+                        str(adapter_raw["path"])
+                        if adapter_raw.get("path") is not None
+                        else None
+                    ),
+                    weight=float(adapter_raw.get("weight", 1.0)),
+                )
+            )
+    return DatasetInferenceModelConfig(
+        base_model=str(_require(model_raw, "base_model")),
+        adapter_enabled=bool(model_raw.get("adapter_enabled", True)),
+        adapter_name=(
+            str(model_raw["adapter_name"])
+            if model_raw.get("adapter_name") is not None
+            else None
+        ),
+        adapter_volume=str(model_raw.get("adapter_volume", "characters-trl-dpo-results")),
+        adapter_path=(
+            str(model_raw["adapter_path"])
+            if model_raw.get("adapter_path") is not None
+            else None
+        ),
+        adapters=adapters,
+        trust_remote_code=bool(model_raw.get("trust_remote_code", False)),
+    )
 
 
 def _resolve_path(raw_path: str | Path) -> Path:
@@ -234,8 +292,22 @@ def _validate_config(config: DatasetInferenceConfig, *, require_local_file: bool
         )
     if config.model.adapter_volume not in SUPPORTED_MODAL_VOLUMES:
         raise ValueError(f"model.adapter_volume must be one of {sorted(SUPPORTED_MODAL_VOLUMES)}")
-    if config.model.adapter_enabled and not config.model.effective_adapter_path:
-        raise ValueError("model.adapter_name or model.adapter_path is required when adapter_enabled=true")
+    if config.model.adapters:
+        for index, adapter in enumerate(config.model.adapters):
+            if adapter.volume not in SUPPORTED_MODAL_VOLUMES:
+                raise ValueError(
+                    f"model.adapters[{index}].volume must be one of {sorted(SUPPORTED_MODAL_VOLUMES)}"
+                )
+            if not adapter.name and not adapter.path:
+                raise ValueError(f"model.adapters[{index}] requires name or path")
+        if config.model.adapter_path:
+            raise ValueError("model.adapter_path cannot be combined with model.adapters")
+    if (
+        config.model.adapter_enabled
+        and not config.model.effective_adapter_path
+        and not config.model.adapters
+    ):
+        raise ValueError("model.adapter_name, model.adapter_path, or model.adapters is required when adapter_enabled=true")
     if config.dataset.limit is not None and config.dataset.limit <= 0:
         raise ValueError("dataset.limit must be positive when provided")
     if not config.dataset.prompt_key:
