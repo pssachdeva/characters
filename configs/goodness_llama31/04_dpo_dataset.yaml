@@ -1,0 +1,35 @@
+name: goodness_llama31_trl_dataset
+
+paths:
+  teacher_input: outputs/goodness_llama31/02_teacher_generation.jsonl
+  student_input: outputs/goodness_llama31/03_student_generation.jsonl
+  output_dir: outputs/goodness_llama31/04_dpo_dataset
+
+target_model:
+  name: meta-llama/Llama-3.1-8B-Instruct
+  tokenizer_name:
+  apply_chat_template: true
+
+format:
+  type: trl_conversational
+  chosen_key: chosen
+  rejected_key: rejected
+
+filters:
+  max_length: 1024
+  drop_empty: true
+  drop_identical_pairs: true
+  require_terminal_punctuation: true
+  drop_overlength: true
+
+splits:
+  train: 0.85
+  val: 0.15
+  seed: 123
+  group_by: prompt
+
+metadata:
+  keep_trait: true
+  keep_source: true
+  keep_sample_index: true
+  keep_models: true

@@ -1,0 +1,11 @@
+name: goodness_llama31_introspection_sft_data
+
+paths:
+  reflection_input: outputs/goodness_llama31/06_self_reflection.jsonl
+  interaction_input: outputs/goodness_llama31/07_self_interaction.jsonl
+  output_dir: outputs/goodness_llama31/08_introspection_sft_data
+
+splits:
+  train: 0.85
+  val: 0.15
+  seed: 123

@@ -1,0 +1,30 @@
+name: llama31_8b_reddit_2000_base
+
+paths:
+  output: outputs/inference/llama31_8b_base/reddit_submissions_2000/train.jsonl
+  remote_output: /inference/llama31_8b_base/reddit_submissions_2000/train.jsonl
+
+model:
+  base_model: meta-llama/Llama-3.1-8B-Instruct
+  adapter_enabled: false
+  trust_remote_code: false
+
+dataset:
+  source: local
+  path: data/reddit_submissions_selftext_2000.jsonl
+  upload_path: /llama31_8b_base/reddit_submissions_2000/dataset.jsonl
+  split: train
+  prompt_key: prompt
+  limit: 2000
+
+generation:
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+
+vllm:
+  max_model_len: 4096
+  gpu_memory_utilization: 0.9
+  max_lora_rank: 64
+  max_num_seqs: 256
+  max_num_batched_tokens: 32768

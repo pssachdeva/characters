@@ -1,0 +1,13 @@
+name: goodness_llama31_distillation_pool
+
+paths:
+  constitution_input: constitutions/full/goodness.jsonl
+  output: outputs/goodness_llama31/01_distillation_prompt_pool.jsonl
+
+sources:
+  - type: lima
+    path: data/lima/train.jsonl
+    source: lima_train
+  - type: lima
+    path: data/lima/test.jsonl
+    source: lima_test

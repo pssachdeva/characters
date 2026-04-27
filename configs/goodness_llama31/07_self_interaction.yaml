@@ -1,0 +1,22 @@
+name: goodness_llama31_self_interaction
+source_trl_config: configs/goodness_llama31/05_trl_dpo.yaml
+
+paths:
+  output: outputs/goodness_llama31/07_self_interaction.jsonl
+  constitution: constitutions/hand-written/goodness.txt
+
+generation:
+  free_guidance_conversations: 1000
+  leading_guidance_conversations: 1000
+  turns_per_conversation: 10
+  max_new_tokens_per_turn: 512
+  temperature: 0.7
+  top_p: 0.95
+
+vllm:
+  max_model_len: 8192
+  gpu_memory_utilization: 0.9
+  max_lora_rank: 64
+  max_num_seqs: 1024
+  max_num_batched_tokens: 32768
+  trust_remote_code: false

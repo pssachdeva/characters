@@ -1,0 +1,36 @@
+name: goodness_llama31_original_lima_prompt_pool_dpo_sft_avg
+
+paths:
+  output: outputs/inference/goodness_llama31_dpo_sft_avg/original_lima_prompt_pool/train.jsonl
+  remote_output: /inference/goodness_llama31_dpo_sft_avg/original_lima_prompt_pool/train.jsonl
+
+model:
+  base_model: meta-llama/Llama-3.1-8B-Instruct
+  adapter_name: goodness_llama31_dpo_sft_avg
+  adapters:
+    - name: goodness_llama31_trl_dpo
+      volume: characters-trl-dpo-results
+      weight: 0.5
+    - name: goodness_llama31_introspection_sft
+      volume: characters-trl-dpo-results
+      weight: 0.5
+  trust_remote_code: false
+
+dataset:
+  source: local
+  path: outputs/goodness_llama31/01_distillation_prompt_pool.jsonl
+  upload_path: /goodness_llama31/12_inference_prompt_pool_dpo_sft_avg_dataset.jsonl
+  split: train
+  prompt_key: prompt
+
+generation:
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+
+vllm:
+  max_model_len: 4096
+  gpu_memory_utilization: 0.9
+  max_lora_rank: 64
+  max_num_seqs: 256
+  max_num_batched_tokens: 32768

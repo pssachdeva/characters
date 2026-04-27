@@ -1,0 +1,23 @@
+name: goodness_llama31_teacher_glm5_together_batch
+generation_type: teacher
+n_samples_per_prompt: 3
+
+paths:
+  input: outputs/goodness_llama31/01_distillation_prompt_pool.jsonl
+  constitution: constitutions/hand-written/goodness.txt
+  prompt: prompts/teacher_generation/teacher_response.txt
+  output: outputs/goodness_llama31/02_teacher_generation.jsonl
+  batch_dir: outputs/goodness_llama31/02_teacher_generation_batch
+
+model:
+  provider: together
+  name: zai-org/GLM-5
+
+sampling:
+  temperature: 0.7
+  top_p: 0.95
+  max_tokens: 4096
+
+batch:
+  endpoint: /v1/chat/completions
+  poll_interval_seconds: 30

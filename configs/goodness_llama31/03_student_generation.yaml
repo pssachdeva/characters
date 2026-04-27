@@ -1,0 +1,17 @@
+name: goodness_llama31_student_openrouter
+n_samples_per_prompt: 3
+
+paths:
+  input: outputs/goodness_llama31/01_distillation_prompt_pool.jsonl
+  prompt: prompts/student_generation/student_response.txt
+  output: outputs/goodness_llama31/03_student_generation.jsonl
+
+model:
+  provider: openrouter
+  name: meta-llama/llama-3.1-8b-instruct
+  max_concurrency: 8
+
+sampling:
+  temperature: 0.7
+  top_p: 0.95
+  max_tokens: 2048
